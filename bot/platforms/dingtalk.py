@@ -67,8 +67,9 @@ class DingtalkPlatform(BotPlatform):
         sign = headers.get('sign', '')
         
         if not timestamp or not sign:
-            logger.warning("[DingTalk] 缺少签名参数")
-            return True  # 可能是不需要签名的请求
+            # 已配置 app_secret 时必须验签，缺少签名参数直接拒绝，避免绕过
+            logger.warning("[DingTalk] 缺少签名参数，拒绝请求")
+            return False
         
         # 验证时间戳（1小时内有效）
         try:
@@ -90,7 +91,7 @@ class DingtalkPlatform(BotPlatform):
         ).digest()
         expected_sign = base64.b64encode(hmac_code).decode('utf-8')
         
-        if sign != expected_sign:
+        if not hmac.compare_digest(sign.encode("utf-8"), expected_sign.encode("utf-8")):
             logger.warning(f"[DingTalk] 签名验证失败")
             return False
         

@@ -239,6 +239,40 @@ class AuthSetPasswordTestCase(unittest.TestCase):
             auth._auth_enabled = None
             self.assertTrue(auth._is_auth_enabled_from_env())
 
+    def test_is_auth_enabled_from_env_falls_back_to_process_env_without_file(self) -> None:
+        # Docker env_file: injects config as process env; /app/.env does not exist.
+        missing_env = self.data_dir / "missing.env"
+        with patch.dict(
+            os.environ,
+            {"ENV_FILE": str(missing_env), "ADMIN_AUTH_ENABLED": "true"},
+        ):
+            self.assertTrue(auth._is_auth_enabled_from_env())
+
+    def test_is_auth_enabled_from_env_falls_back_when_file_lacks_key(self) -> None:
+        custom_env = self.data_dir / "no_auth_key.env"
+        custom_env.write_text("STOCK_LIST=600519\n", encoding="utf-8")
+        with patch.dict(
+            os.environ,
+            {"ENV_FILE": str(custom_env), "ADMIN_AUTH_ENABLED": "true"},
+        ):
+            self.assertTrue(auth._is_auth_enabled_from_env())
+
+    def test_is_auth_enabled_from_env_file_value_wins_over_process_env(self) -> None:
+        # The Web toggle persists to .env, so a file value must still take effect.
+        custom_env = self.data_dir / "disabled.env"
+        custom_env.write_text("ADMIN_AUTH_ENABLED=false\n", encoding="utf-8")
+        with patch.dict(
+            os.environ,
+            {"ENV_FILE": str(custom_env), "ADMIN_AUTH_ENABLED": "true"},
+        ):
+            self.assertFalse(auth._is_auth_enabled_from_env())
+
+    def test_is_auth_enabled_from_env_defaults_to_disabled(self) -> None:
+        missing_env = self.data_dir / "missing.env"
+        with patch.dict(os.environ, {"ENV_FILE": str(missing_env)}):
+            os.environ.pop("ADMIN_AUTH_ENABLED", None)
+            self.assertFalse(auth._is_auth_enabled_from_env())
+
     def test_refresh_auth_state_clears_session_secret_cache(self) -> None:
         def run():
             first_secret = auth.create_session()
