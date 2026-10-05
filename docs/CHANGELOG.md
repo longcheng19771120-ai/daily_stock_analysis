@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] `ADMIN_AUTH_ENABLED` 在 `.env` 文件不存在或未定义该键时回退读取进程环境变量，修复 Docker 通过 `env_file:` 注入配置时管理员登录保护被静默关闭的问题；`.env` 中显式配置的值（含 Web 设置页开关）仍优先生效。
+- [修复] 钉钉 Webhook 适配器在已配置 `DINGTALK_APP_SECRET` 时，缺少 `timestamp`/`sign` 的请求不再放行，签名比对改为常量时间比较。
 - [修复] 个股资金流按沪深北市场请求并取最新有效交易日的主力净流入金额；去掉默认股票和市场排名的错误降级，行业排名仅使用有限金额，行业金额全部缺失或非有限时仍保留有效个股结果。
 
 - [修复] `REPORT_LANGUAGE=en` 时个股决策仪表盘的 system/user prompt 改用完整英文模板（`ko` 复用英文骨架并保留韩文输出指令），不再在中文模板末尾追加英文约束，避免本地小模型（如 `ollama/qwen3:14b`）受主语言影响仍输出中文；JSON 键名、`decision_type`/`action` 枚举与解析契约不变，中文模板保持逐字不变（Fixes #2352）。
