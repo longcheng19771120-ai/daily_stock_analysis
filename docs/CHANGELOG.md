@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [修复] 企业微信长消息分批发送时，某一批请求抛出异常（如超时、连接失败）不再中断后续批次，该批计为失败，全部成功才返回成功。
 - [修复] `ADMIN_AUTH_ENABLED` 在 `.env` 文件不存在或未定义该键时回退读取进程环境变量，修复 Docker 通过 `env_file:` 注入配置时管理员登录保护被静默关闭的问题；`.env` 中显式配置的值（含 Web 设置页开关）仍优先生效。
 - [修复] 钉钉 Webhook 适配器在已配置 `DINGTALK_APP_SECRET` 时，缺少 `timestamp`/`sign` 的请求不再放行，签名比对改为常量时间比较。
 - [修复] 个股资金流按沪深北市场请求并取最新有效交易日的主力净流入金额；去掉默认股票和市场排名的错误降级，行业排名仅使用有限金额，行业金额全部缺失或非有限时仍保留有效个股结果。

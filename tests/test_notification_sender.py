@@ -307,6 +307,26 @@ class TestWechatSender(unittest.TestCase):
         self.assertIn("# 🎯 Market Review", payload["text"]["content"])
         self.assertIn("Body", payload["text"]["content"])
 
+    @mock.patch("src.notification_sender.wechat_sender.time.sleep")
+    @mock.patch("src.notification_sender.wechat_sender.requests.post")
+    def test_chunked_send_continues_after_chunk_exception(self, mock_post, _mock_sleep):
+        mock_post.side_effect = [
+            _response(200, {"errcode": 0}),
+            requests.exceptions.ConnectionError("boom"),
+            _response(200, {"errcode": 0}),
+        ]
+        cfg = _config(wechat_webhook_url="https://wechat.example/hook")
+        sender = WechatSender(cfg)
+
+        with mock.patch(
+            "src.notification_sender.wechat_sender.chunk_content_by_max_bytes",
+            return_value=["part1", "part2", "part3"],
+        ):
+            result = sender._send_wechat_chunked("ignored", 100)
+
+        self.assertFalse(result)
+        self.assertEqual(mock_post.call_count, 3)
+
     @mock.patch("src.notification_sender.wechat_sender.requests.post")
     def test_send_wechat_image_over_limit_returns_false(self, mock_post):
         cfg = _config(wechat_webhook_url="https://wechat.example/hook")
