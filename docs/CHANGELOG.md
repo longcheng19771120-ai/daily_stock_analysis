@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 - [新功能] Web 新增“K线”页面与 `GET /api/v1/stocks/{stock_code}/kline` 接口：支持日线、周线及 A 股 60/30 分钟 K 线，叠加成交量、MA5/20/60 与简化缠论笔/线段（TradingView Lightweight Charts 渲染，红涨绿跌）；原 `/history` 接口不变。
+- [新功能] Web 新增“市场”总览页（主要指数、美股板块热力图、市场新闻），K线页下方新增技术指标汇总、公司简介和财务数据；均为浏览器直接加载的 TradingView 免费小部件，不经过后端、不新增配置，无法访问 tradingview.com 时显示加载失败提示。
 - [修复] 个股资金流按沪深北市场请求并取最新有效交易日的主力净流入金额；去掉默认股票和市场排名的错误降级，行业排名仅使用有限金额，行业金额全部缺失或非有限时仍保留有效个股结果。
 
 - [修复] `REPORT_LANGUAGE=en` 时个股决策仪表盘的 system/user prompt 改用完整英文模板（`ko` 复用英文骨架并保留韩文输出指令），不再在中文模板末尾追加英文约束，避免本地小模型（如 `ollama/qwen3:14b`）受主语言影响仍输出中文；JSON 键名、`decision_type`/`action` 枚举与解析契约不变，中文模板保持逐字不变（Fixes #2352）。

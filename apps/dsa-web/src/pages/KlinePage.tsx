@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw, Search } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { klineApi, type KlinePeriod, type StockKline } from '../api/kline';
@@ -7,6 +7,8 @@ import { getParsedApiError, type ParsedApiError } from '../api/error';
 import { ApiErrorAlert, AppPage, Card, EmptyState, PageHeader } from '../components/common';
 import { KlineChart, type KlineOverlayOptions } from '../components/kline/KlineChart';
 import { StockAutocomplete } from '../components/StockAutocomplete';
+import { TradingViewWidget } from '../components/tradingview/TradingViewWidget';
+import { toTradingViewSymbol } from '../components/tradingview/tradingViewUtils';
 import { useUiLanguage } from '../contexts/UiLanguageContext';
 import type { UiTextKey } from '../i18n/uiText';
 import { cn } from '../utils/cn';
@@ -69,6 +71,13 @@ const KlinePage: React.FC = () => {
     const nextCode = inputCode.trim();
     if (nextCode) updateParams({ code: nextCode });
   };
+
+  const tvSymbol = toTradingViewSymbol(code);
+  const tvConfigs = useMemo(() => (tvSymbol ? {
+    technical: { symbol: tvSymbol, interval: '1D', showIntervalTabs: true, displayMode: 'single' },
+    profile: { symbol: tvSymbol },
+    financials: { symbol: tvSymbol, displayMode: 'regular' },
+  } : null), [tvSymbol]);
 
   const title = data?.stockName ? `${data.stockName} (${data.stockCode})` : code;
 
@@ -166,6 +175,29 @@ const KlinePage: React.FC = () => {
 
           <p className="mt-3 text-xs text-secondary-text">{t('kline.chanNote')}</p>
         </Card>
+
+        {tvConfigs ? (
+          <section className="space-y-3" aria-label={t('kline.tv.title')}>
+            <div>
+              <h2 className="text-base font-semibold text-foreground">{t('kline.tv.title')}</h2>
+              <p className="mt-0.5 text-xs text-secondary-text">{t('kline.tv.description', { symbol: tvSymbol ?? '' })}</p>
+            </div>
+            <div className="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
+              <Card padding="sm" className="min-w-0 rounded-lg">
+                <h3 className="mb-2 text-sm font-semibold text-foreground">{t('kline.tv.technical')}</h3>
+                <TradingViewWidget widget="technical-analysis" config={tvConfigs.technical} height={420} />
+              </Card>
+              <Card padding="sm" className="min-w-0 rounded-lg">
+                <h3 className="mb-2 text-sm font-semibold text-foreground">{t('kline.tv.profile')}</h3>
+                <TradingViewWidget widget="symbol-profile" config={tvConfigs.profile} height={420} />
+              </Card>
+              <Card padding="sm" className="min-w-0 rounded-lg lg:col-span-2 2xl:col-span-1">
+                <h3 className="mb-2 text-sm font-semibold text-foreground">{t('kline.tv.financials')}</h3>
+                <TradingViewWidget widget="financials" config={tvConfigs.financials} height={420} />
+              </Card>
+            </div>
+          </section>
+        ) : null}
       </div>
     </AppPage>
   );
