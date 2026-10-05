@@ -170,7 +170,13 @@ class WechatSender:
         total_chunks = len(chunks)
         success_count = 0
         for i, chunk in enumerate(chunks):
-            if self._send_wechat_message(chunk):
+            # 单批请求异常（超时、连接失败、非 JSON 响应）只记为该批失败，继续发送后续批次
+            try:
+                sent = self._send_wechat_message(chunk)
+            except Exception as e:
+                logger.error(f"企业微信第 {i+1}/{total_chunks} 批发送异常: {e}")
+                sent = False
+            if sent:
                 success_count += 1
             else:
                 logger.error(f"企业微信第 {i+1}/{total_chunks} 批发送失败")

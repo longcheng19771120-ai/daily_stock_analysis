@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - [新功能] Web 新增“K线”页面与 `GET /api/v1/stocks/{stock_code}/kline` 接口：支持日线、周线及 A 股 60/30 分钟 K 线，叠加成交量、MA5/20/60 与简化缠论笔/线段（TradingView Lightweight Charts 渲染，红涨绿跌）；原 `/history` 接口不变。
 - [新功能] Web 新增“市场”总览页（主要指数、美股板块热力图、市场新闻），K线页下方新增技术指标汇总、公司简介和财务数据；均为浏览器直接加载的 TradingView 免费小部件，不经过后端、不新增配置，无法访问 tradingview.com 时显示加载失败提示。
+- [修复] 企业微信长消息分批发送时，某一批请求抛出异常（如超时、连接失败）不再中断后续批次，该批计为失败，全部成功才返回成功。
+- [修复] `ADMIN_AUTH_ENABLED` 在 `.env` 文件不存在或未定义该键时回退读取进程环境变量，修复 Docker 通过 `env_file:` 注入配置时管理员登录保护被静默关闭的问题；`.env` 中显式配置的值（含 Web 设置页开关）仍优先生效。
+- [修复] 钉钉 Webhook 适配器在已配置 `DINGTALK_APP_SECRET` 时，缺少 `timestamp`/`sign` 的请求不再放行，签名比对改为常量时间比较。
 - [修复] 个股资金流按沪深北市场请求并取最新有效交易日的主力净流入金额；去掉默认股票和市场排名的错误降级，行业排名仅使用有限金额，行业金额全部缺失或非有限时仍保留有效个股结果。
 
 - [修复] `REPORT_LANGUAGE=en` 时个股决策仪表盘的 system/user prompt 改用完整英文模板（`ko` 复用英文骨架并保留韩文输出指令），不再在中文模板末尾追加英文约束，避免本地小模型（如 `ollama/qwen3:14b`）受主语言影响仍输出中文；JSON 键名、`decision_type`/`action` 枚举与解析契约不变，中文模板保持逐字不变（Fixes #2352）。
