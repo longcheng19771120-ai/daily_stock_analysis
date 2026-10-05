@@ -114,6 +114,45 @@ class StockHistoryResponse(BaseModel):
     })
 
 
+class ChartBar(BaseModel):
+    """K 线图数据点（time 为日线 YYYY-MM-DD 或分钟线 YYYY-MM-DD HH:MM，北京时间）"""
+
+    time: str = Field(..., description="时间")
+    open: float = Field(..., description="开盘价")
+    high: float = Field(..., description="最高价")
+    low: float = Field(..., description="最低价")
+    close: float = Field(..., description="收盘价")
+    volume: Optional[float] = Field(None, description="成交量")
+    amount: Optional[float] = Field(None, description="成交额")
+
+
+class ChanPointItem(BaseModel):
+    """缠论笔/线段端点，index 指向 bars 中的序号"""
+
+    index: int = Field(..., description="对应 bars 的序号")
+    price: float = Field(..., description="端点价格")
+    kind: Literal["top", "bottom"] = Field(..., description="顶/底")
+
+
+class ChanStructure(BaseModel):
+    bi: List[ChanPointItem] = Field(default_factory=list, description="笔端点")
+    segments: List[ChanPointItem] = Field(default_factory=list, description="线段端点（仅已确认线段）")
+
+
+class StockKlineResponse(BaseModel):
+    """K 线图数据：多周期 K 线 + 均线 + 缠论笔/线段"""
+
+    stock_code: str = Field(..., description="股票代码")
+    stock_name: Optional[str] = Field(None, description="股票名称")
+    period: Literal["daily", "weekly", "60m", "30m"] = Field(..., description="K 线周期")
+    source: Optional[str] = Field(None, description="数据源")
+    bars: List[ChartBar] = Field(default_factory=list, description="K 线")
+    moving_averages: Dict[str, List[Optional[float]]] = Field(
+        default_factory=dict, description="均线，键为周期，值与 bars 一一对应"
+    )
+    chan: ChanStructure = Field(default_factory=ChanStructure, description="缠论结构")
+
+
 class StockProfileQuoteBlock(BaseModel):
     status: StockProfileStatus
     data: Optional[StockQuote] = None

@@ -1548,6 +1548,7 @@ For this feature, the product behavior is:
 | `/api/v1/backtest/results` | GET | Query backtest results (paginated) |
 | `/api/v1/backtest/performance` | GET | Get overall backtest performance |
 | `/api/v1/backtest/performance/{code}` | GET | Get per-stock backtest performance |
+| `/api/v1/stocks/{stock_code}/kline?period=daily\|weekly\|60m\|30m&days=365` | GET | K-line chart data: candles, MA5/20/60 and Chan stroke/segment endpoints (daily/weekly reuse the daily-data fallback chain; 60m/30m are A-share only via AkShare Sina minute bars). Web entry: "Chart" in the sidebar |
 | `/api/health` | GET | Health check |
 | `/docs` | GET | API Swagger documentation |
 
