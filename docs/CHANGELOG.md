@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [新功能] Web 新增“K线”页面与 `GET /api/v1/stocks/{stock_code}/kline` 接口：支持日线、周线及 A 股 60/30 分钟 K 线，叠加成交量、MA5/20/60 与简化缠论笔/线段（TradingView Lightweight Charts 渲染，红涨绿跌）；原 `/history` 接口不变。
+- [新功能] Web 新增“市场”总览页（主要指数、美股板块热力图、市场新闻），K线页下方新增技术指标汇总、公司简介和财务数据；均为浏览器直接加载的 TradingView 免费小部件，不经过后端、不新增配置，无法访问 tradingview.com 时显示加载失败提示。
 - [修复] 企业微信长消息分批发送时，某一批请求抛出异常（如超时、连接失败）不再中断后续批次，该批计为失败，全部成功才返回成功。
 - [修复] `ADMIN_AUTH_ENABLED` 在 `.env` 文件不存在或未定义该键时回退读取进程环境变量，修复 Docker 通过 `env_file:` 注入配置时管理员登录保护被静默关闭的问题；`.env` 中显式配置的值（含 Web 设置页开关）仍优先生效。
 - [修复] 钉钉 Webhook 适配器在已配置 `DINGTALK_APP_SECRET` 时，缺少 `timestamp`/`sign` 的请求不再放行，签名比对改为常量时间比较。

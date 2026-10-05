@@ -1548,8 +1548,11 @@ For this feature, the product behavior is:
 | `/api/v1/backtest/results` | GET | Query backtest results (paginated) |
 | `/api/v1/backtest/performance` | GET | Get overall backtest performance |
 | `/api/v1/backtest/performance/{code}` | GET | Get per-stock backtest performance |
+| `/api/v1/stocks/{stock_code}/kline?period=daily\|weekly\|60m\|30m&days=365` | GET | K-line chart data: candles, MA5/20/60 and Chan stroke/segment endpoints (daily/weekly reuse the daily-data fallback chain; 60m/30m are A-share only via AkShare Sina minute bars). Web entry: "Chart" in the sidebar |
 | `/api/health` | GET | Health check |
 | `/docs` | GET | API Swagger documentation |
+
+> Note: The Web "Markets" page (`/market`) and the "TradingView data" section below the Chart page use free TradingView embed widgets. The browser loads their scripts and data directly from `s3.tradingview.com`; nothing goes through this backend and there is no API for them. A-share codes map to `SSE:` (6/9), `SZSE:` (0/2/3) or `BSE:` (4/8/920), HK codes to `HKEX:`, and US tickers pass through unchanged. TradingView does not serve embed data for some A-share symbols and quotes may be delayed. When tradingview.com is unreachable each widget shows a load-failure notice without affecting the rest of the page.
 
 > Note: `POST /api/v1/analysis/analyze` supports only one stock when `async_mode=false`; batch `stock_codes` requires `async_mode=true`. The async `202` response returns a single `task_id` for one stock, or an `accepted` / `duplicates` summary for batch requests.
 > Note: `POST /api/v1/analysis/analyze` accepts `skills` as an array of strategy IDs; if omitted, server defaults are used. The legacy field `strategies` is still accepted for backward compatibility.

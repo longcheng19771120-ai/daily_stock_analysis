@@ -24,6 +24,7 @@ from api.v1.schemas.stocks import (
     ExtractItem,
     KLineData,
     StockHistoryResponse,
+    StockKlineResponse,
     StockProfileResponse,
     StockQuote,
 )
@@ -40,6 +41,7 @@ from src.services.import_parser import (
     parse_import_from_text,
 )
 from src.services.stock_service import StockService
+from src.services.kline_service import KlineService, KlineUnsupportedError
 from src.services.stock_profile_service import InvalidStockProfileCode, StockProfileService
 from src.services.run_diagnostics import sanitize_diagnostic_text
 from src.services.stock_list_parser import split_stock_list
@@ -593,3 +595,39 @@ def get_stock_history(
                 "message": f"获取历史行情失败: {str(e)}"
             }
         )
+
+
+@router.get(
+    "/{stock_code}/kline",
+    response_model=StockKlineResponse,
+    responses={
+        200: {"description": "K 线图数据"},
+        422: {"description": "不支持的代码或周期", "model": ErrorResponse},
+        502: {"description": "数据源获取失败", "model": ErrorResponse},
+    },
+    summary="获取 K 线图数据（含均线与缠论笔/线段）",
+    description=(
+        "返回指定周期的 K 线、均线和缠论笔/线段端点。"
+        "daily/weekly 复用日线多数据源回退（周线由日线聚合）；"
+        "60m/30m 仅支持 A 股，来自 AkShare 新浪分钟线（前复权）。"
+    ),
+)
+def get_stock_kline(
+    stock_code: str,
+    period: str = Query("daily", description="K 线周期", pattern="^(daily|weekly|60m|30m)$"),
+    days: int = Query(365, ge=30, le=1500, description="日线/周线回看的交易日数量（分钟线忽略）"),
+) -> StockKlineResponse:
+    try:
+        payload = KlineService().get_kline(stock_code, period=period, days=days)
+    except KlineUnsupportedError as e:
+        raise HTTPException(status_code=422, detail={"error": "unsupported", "message": str(e)})
+    except Exception as e:
+        logger.warning("获取 %s %s K 线失败: %s", stock_code, period, e, exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "error": "upstream_error",
+                "message": f"K 线数据获取失败: {sanitize_diagnostic_text(str(e))}",
+            },
+        )
+    return StockKlineResponse(**payload)

@@ -2909,6 +2909,86 @@
           }
         }
       }
+    },
+    "/api/v1/stocks/{stock_code}/kline": {
+      "get": {
+        "tags": [
+          "Stocks"
+        ],
+        "summary": "获取 K 线图数据（含均线与缠论笔/线段）",
+        "description": "返回指定周期的 K 线、均线和缠论笔/线段端点。daily/weekly 复用日线多数据源回退（周线由日线聚合）；60m/30m 仅支持 A 股，来自 AkShare 新浪分钟线（前复权）。",
+        "operationId": "get_stock_kline_api_v1_stocks__stock_code__kline_get",
+        "parameters": [
+          {
+            "name": "stock_code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Stock Code"
+            }
+          },
+          {
+            "name": "period",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(daily|weekly|60m|30m)$",
+              "description": "K 线周期",
+              "default": "daily",
+              "title": "Period"
+            },
+            "description": "K 线周期"
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1500,
+              "minimum": 30,
+              "description": "日线/周线回看的交易日数量（分钟线忽略）",
+              "default": 365,
+              "title": "Days"
+            },
+            "description": "日线/周线回看的交易日数量（分钟线忽略）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "K 线图数据",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockKlineResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "不支持的代码或周期",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "数据源获取失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9241,6 +9321,203 @@
         ],
         "title": "DecisionSignalReviewMemory",
         "description": "Read-only, low-sensitivity review summary of DecisionSignal outcomes for one stock.\n\nAggregated server-side from signal-level outcomes/feedback.  Raw evidence,\nprompt text, diagnostics, and holdings are intentionally excluded; the\npayload is observational context only and must not be used as a trading\nsignal."
+      },
+      "StockKlineResponse": {
+        "properties": {
+          "stock_code": {
+            "type": "string",
+            "title": "Stock Code",
+            "description": "股票代码"
+          },
+          "stock_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stock Name",
+            "description": "股票名称"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "60m",
+              "30m"
+            ],
+            "title": "Period",
+            "description": "K 线周期"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "数据源"
+          },
+          "bars": {
+            "items": {
+              "$ref": "#/components/schemas/ChartBar"
+            },
+            "type": "array",
+            "title": "Bars",
+            "description": "K 线"
+          },
+          "moving_averages": {
+            "additionalProperties": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Moving Averages",
+            "description": "均线，键为周期，值与 bars 一一对应"
+          },
+          "chan": {
+            "$ref": "#/components/schemas/ChanStructure",
+            "description": "缠论结构"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stock_code",
+          "period"
+        ],
+        "title": "StockKlineResponse",
+        "description": "K 线图数据：多周期 K 线 + 均线 + 缠论笔/线段"
+      },
+      "ChartBar": {
+        "properties": {
+          "time": {
+            "type": "string",
+            "title": "Time",
+            "description": "时间"
+          },
+          "open": {
+            "type": "number",
+            "title": "Open",
+            "description": "开盘价"
+          },
+          "high": {
+            "type": "number",
+            "title": "High",
+            "description": "最高价"
+          },
+          "low": {
+            "type": "number",
+            "title": "Low",
+            "description": "最低价"
+          },
+          "close": {
+            "type": "number",
+            "title": "Close",
+            "description": "收盘价"
+          },
+          "volume": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume",
+            "description": "成交量"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount",
+            "description": "成交额"
+          }
+        },
+        "type": "object",
+        "required": [
+          "time",
+          "open",
+          "high",
+          "low",
+          "close"
+        ],
+        "title": "ChartBar",
+        "description": "K 线图数据点（time 为日线 YYYY-MM-DD 或分钟线 YYYY-MM-DD HH:MM，北京时间）"
+      },
+      "ChanPointItem": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index",
+            "description": "对应 bars 的序号"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price",
+            "description": "端点价格"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "top",
+              "bottom"
+            ],
+            "title": "Kind",
+            "description": "顶/底"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "price",
+          "kind"
+        ],
+        "title": "ChanPointItem",
+        "description": "缠论笔/线段端点，index 指向 bars 中的序号"
+      },
+      "ChanStructure": {
+        "properties": {
+          "bi": {
+            "items": {
+              "$ref": "#/components/schemas/ChanPointItem"
+            },
+            "type": "array",
+            "title": "Bi",
+            "description": "笔端点"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/ChanPointItem"
+            },
+            "type": "array",
+            "title": "Segments",
+            "description": "线段端点（仅已确认线段）"
+          }
+        },
+        "type": "object",
+        "title": "ChanStructure"
       }
     },
     "securitySchemes": {
