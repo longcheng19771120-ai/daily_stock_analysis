@@ -23,13 +23,16 @@
 - 中枢（笔中枢）：连续三笔价格区间的重叠部分 [ZD, ZG]（ZG 取三笔高点最小值、
   ZD 取低点最大值，ZG > ZD 才成立）。之后终点仍在 [ZD, ZG] 内的笔算作中枢内
   震荡；终点离开区间的笔为离开笔，其后的回抽笔回到 [ZD, ZG] 内则中枢延伸，
-  否则中枢结束（已确认）；数据末尾中枢未结束时
+  否则中枢结束（已确认）；中枢延伸到九笔时视为升级为更大级别中枢，本级别
+  在此截断（已确认），避免震荡行情里一个箱体铺满整段数据；数据末尾中枢未结束时
   标记为未确认：最后一笔仍在区间内则画到最后一根 K 线，已离开、等待回抽则
   画到离开笔起点。中枢之前的一笔是进入笔（首个中枢从
   第二笔开始找），上一个中枢的离开笔就是下一个中枢的进入笔。
 - 买点（简化判定，仅供参考）：
-  - 一买：中枢的进入笔与离开笔都向下，离开笔创出中枢以来新低，且离开笔的
-    MACD 绿柱面积小于进入笔（背驰），买点在离开笔终点。
+  - 一买：中枢的进入笔向下；之后某一向下笔（中枢延伸过程中的离开笔，或
+    最终的离开笔）创出中枢以来新低，且该笔的 MACD 绿柱面积小于进入笔（背驰），
+    买点在该笔终点。新低后回抽回到中枢只会让中枢延伸，不影响一买成立；
+    每个中枢最多一个一买。
   - 二买：一买之后的下一个底分型端点不破一买低点。
   - 三买：中枢向上离开后，回抽笔的低点仍高于 ZG（不回中枢），买点在回抽笔终点。
   这里不区分盘整背驰与趋势背驰、也不做区间套，与完整缠论定义有差距。
@@ -42,6 +45,8 @@ from typing import Dict, List, Optional, Sequence
 
 MIN_BI_BAR_GAP = 4
 MIN_SEGMENT_BI = 3
+# 中枢延伸到九笔即视为升级为更大级别中枢，本级别在此截断
+MAX_PIVOT_BI = 9
 
 
 @dataclass(frozen=True)
@@ -326,6 +331,9 @@ def find_pivots(bi_points: Sequence[ChanPoint], last_bar_index: Optional[int] = 
         departing = False
         k = last + 1
         while k < bi_count:
+            if last - i + 1 >= MAX_PIVOT_BI:
+                confirmed = True
+                break
             k_high, k_low = _bi_range(bi_points, k)
             if zd <= bi_points[k + 1].price <= zg:
                 # 终点仍在中枢区间内：中枢内震荡
@@ -339,6 +347,10 @@ def find_pivots(bi_points: Sequence[ChanPoint], last_bar_index: Optional[int] = 
                 break
             back_high, back_low = _bi_range(bi_points, k + 1)
             if back_low < zg and back_high > zd:
+                if last + 2 - i + 1 > MAX_PIVOT_BI:
+                    # 再延伸两笔会超过九笔上限：本级别中枢到此结束
+                    confirmed = True
+                    break
                 gg, dd = max(gg, k_high, back_high), min(dd, k_low, back_low)
                 last = k + 1
                 k += 2
@@ -406,16 +418,20 @@ def find_buy_points(
         entry, departure = pivot.first_bi - 1, pivot.last_bi + 1
         if departure >= bi_count:
             continue
-        if entry >= 0 and _bi_is_down(bi_points, entry) and _bi_is_down(bi_points, departure):
-            dep_low = bi_points[departure + 1].price
-            if dep_low < pivot.dd and _bi_macd_area(bi_points, departure, hist) < _bi_macd_area(
-                bi_points, entry, hist
-            ):
-                add(departure + 1, "buy1")
-                # 二买：一买之后下一个底分型端点不破一买低点
-                second = departure + 3
-                if second < len(bi_points) and bi_points[second].price > dep_low:
-                    add(second, "buy2")
+        if entry >= 0 and _bi_is_down(bi_points, entry):
+            entry_area = _bi_macd_area(bi_points, entry, hist)
+            running_low = min(_bi_range(bi_points, k)[1] for k in range(pivot.first_bi, pivot.first_bi + 3))
+            # 中枢延伸过程中的离开笔与最终离开笔都可能创新低并背驰
+            for k in range(pivot.first_bi + 3, departure + 1):
+                low = _bi_range(bi_points, k)[1]
+                if _bi_is_down(bi_points, k) and low < running_low and _bi_macd_area(bi_points, k, hist) < entry_area:
+                    add(k + 1, "buy1")
+                    # 二买：一买之后下一个底分型端点不破一买低点
+                    second = k + 3
+                    if second < len(bi_points) and bi_points[second].price > low:
+                        add(second, "buy2")
+                    break
+                running_low = min(running_low, low)
         if not _bi_is_down(bi_points, departure) and departure + 2 < len(bi_points):
             pullback_low = bi_points[departure + 2].price
             if bi_points[departure + 1].price > pivot.zg and pullback_low > pivot.zg:

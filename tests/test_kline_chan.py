@@ -17,6 +17,7 @@ import src.auth as auth
 from api.app import create_app
 from src.config import Config
 from src.services.chan_analysis import (
+    MAX_PIVOT_BI,
     ChanPoint,
     analyze_chan,
     find_bis,
@@ -381,3 +382,26 @@ def test_open_pivot_stops_at_departure_while_waiting_for_pullback():
     assert len(pivots) == 1
     assert pivots[0].confirmed is False
     assert pivots[0].end_index == points[5].index
+
+
+def test_pivot_extension_is_capped_at_nine_strokes():
+    # 一直在 [12, 18] 内震荡的 14 笔：九笔处截断，后面另起中枢，不会一个箱体铺满全段
+    spec = [(5, 5)] + [(20 if k % 2 == 0 else 10, 5) for k in range(14)] + [(16, 5)]
+    points, closes = _points_with_closes(spec)
+    pivots = find_pivots(points, last_bar_index=len(closes) - 1)
+    assert len(pivots) >= 2
+    first = pivots[0]
+    assert first.last_bi - first.first_bi + 1 == MAX_PIVOT_BI
+    assert first.confirmed is True
+    assert first.end_index == points[first.last_bi + 1].index
+
+
+def test_first_buy_when_new_low_pulls_back_into_pivot():
+    # 进入笔 40->20 慢跌；离开笔 25->18 创新低且背驰，但反弹到 24 回到中枢 -> 中枢延伸，
+    # 一买仍在 18；之后低点 19 不破 18 -> 二买
+    spec = [(40, 40), (20, 6), (26, 6), (22, 6), (25, 4), (18, 6), (24, 6), (19, 6), (23, 6), (21, 4)]
+    points, closes = _points_with_closes(spec)
+    pivots = find_pivots(points, last_bar_index=len(closes) - 1)
+    assert pivots and pivots[0].last_bi >= 5
+    buys = find_buy_points(points, pivots, closes)
+    assert [(b.kind, b.price) for b in buys] == [("buy1", 18.0), ("buy2", 19.0)]

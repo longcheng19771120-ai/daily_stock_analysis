@@ -136,7 +136,7 @@ const KlinePage: React.FC = () => {
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-xl border border-border/70 bg-card/70 p-1">
+              <div className="inline-flex max-w-full flex-wrap rounded-xl border border-border/70 bg-card/70 p-1">
                 {PERIODS.map((option) => (
                   <button
                     key={option.value}
@@ -153,7 +153,7 @@ const KlinePage: React.FC = () => {
                   </button>
                 ))}
               </div>
-              <div className="inline-flex rounded-xl border border-border/70 bg-card/70 p-1">
+              <div className="inline-flex max-w-full flex-wrap rounded-xl border border-border/70 bg-card/70 p-1">
                 {OVERLAYS.map((option) => (
                   <button
                     key={option.key}
