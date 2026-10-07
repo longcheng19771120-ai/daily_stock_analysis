@@ -41,3 +41,28 @@ export function toBuyMarkers(
       text: labelFor(point.kind),
     }));
 }
+
+export type MacdSeries = { dif: number[]; dea: number[]; hist: number[] };
+
+/**
+ * MACD(12, 26, 9)，与后端一买背驰判定的算法一致：EMA 以首根收盘价起算，
+ * 柱值取 2 * (DIF - DEA)（国内行情软件惯例）。
+ */
+export function computeMacd(closes: number[], fast = 12, slow = 26, signal = 9): MacdSeries {
+  const dif: number[] = [];
+  const dea: number[] = [];
+  const hist: number[] = [];
+  let emaFast = 0;
+  let emaSlow = 0;
+  let signalLine = 0;
+  closes.forEach((close, i) => {
+    emaFast = i === 0 ? close : emaFast + ((close - emaFast) * 2) / (fast + 1);
+    emaSlow = i === 0 ? close : emaSlow + ((close - emaSlow) * 2) / (slow + 1);
+    const d = emaFast - emaSlow;
+    signalLine = i === 0 ? d : signalLine + ((d - signalLine) * 2) / (signal + 1);
+    dif.push(d);
+    dea.push(signalLine);
+    hist.push(2 * (d - signalLine));
+  });
+  return { dif, dea, hist };
+}

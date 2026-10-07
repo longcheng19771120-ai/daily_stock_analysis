@@ -26,6 +26,7 @@ const OVERLAYS: Array<{ key: keyof KlineOverlayOptions; labelKey: UiTextKey }> =
   { key: 'showSegments', labelKey: 'kline.overlay.segments' },
   { key: 'showPivots', labelKey: 'kline.overlay.pivots' },
   { key: 'showBuyPoints', labelKey: 'kline.overlay.buyPoints' },
+  { key: 'showMacd', labelKey: 'kline.overlay.macd' },
 ];
 
 const DEFAULT_CODE = '600519';
@@ -51,6 +52,7 @@ const KlinePage: React.FC = () => {
     showSegments: true,
     showPivots: true,
     showBuyPoints: true,
+    showMacd: true,
   });
 
   const load = useCallback(async () => {

@@ -13,7 +13,7 @@ import {
 } from 'lightweight-charts';
 import { useTheme } from 'next-themes';
 import type { StockKline } from '../../api/kline';
-import { toBuyMarkers, toChartTime, toPolyline } from './klineChartUtils';
+import { computeMacd, toBuyMarkers, toChartTime, toPolyline } from './klineChartUtils';
 import { PivotBoxesPrimitive } from './pivotBoxesPrimitive';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
 
@@ -25,7 +25,10 @@ const BI_COLOR = '#0ea5e9';
 const SEGMENT_COLOR = '#f97316';
 const PIVOT_STYLE = { fill: 'rgba(234,179,8,0.14)', border: 'rgba(234,179,8,0.85)' };
 const BUY_COLORS = { buy1: '#dc2626', buy2: '#db2777', buy3: '#9333ea' } as const;
+const DEA_COLOR = '#eab308';
 const DEFAULT_VISIBLE_BARS = 180;
+// MACD 副图与主图的高度比例
+const MACD_PANE_STRETCH = 0.32;
 
 export type KlineOverlayOptions = {
   showMa: boolean;
@@ -33,6 +36,7 @@ export type KlineOverlayOptions = {
   showSegments: boolean;
   showPivots: boolean;
   showBuyPoints: boolean;
+  showMacd: boolean;
 };
 
 type KlineChartProps = {
@@ -50,6 +54,7 @@ type LegendState = {
   changePct: number | null;
   volume: number | null;
   ma: Array<{ key: string; value: number | null; color: string }>;
+  macd: { dif: number; dea: number; hist: number } | null;
 };
 
 function formatVolume(value: number | null): string {
@@ -71,12 +76,14 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
     [data.movingAverages],
   );
   const intraday = data.period === '60m' || data.period === '30m';
+  const macd = useMemo(() => computeMacd(data.bars.map((bar) => bar.close)), [data.bars]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return undefined;
 
     const textColor = isDark ? '#cbd5e1' : '#334155';
+    const difColor = isDark ? '#e2e8f0' : '#1e293b';
     const gridColor = isDark ? 'rgba(148,163,184,0.12)' : 'rgba(100,116,139,0.12)';
     const chart = createChart(container, {
       autoSize: true,
@@ -158,6 +165,28 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
       );
     }
 
+    if (overlays.showMacd) {
+      const macdDefaults = { ...lineDefaults, priceFormat: { type: 'price', precision: 3, minMove: 0.001 } } as const;
+      chart
+        .addSeries(HistogramSeries, { ...macdDefaults }, 1)
+        .setData(
+          macd.hist.map((value, i) => ({
+            time: times[i],
+            value,
+            color: value >= 0 ? 'rgba(239,68,68,0.75)' : 'rgba(34,197,94,0.75)',
+          })),
+        );
+      chart
+        .addSeries(LineSeries, { ...macdDefaults, color: difColor, lineWidth: 1 }, 1)
+        .setData(macd.dif.map((value, i) => ({ time: times[i], value })));
+      chart
+        .addSeries(LineSeries, { ...macdDefaults, color: DEA_COLOR, lineWidth: 1 }, 1)
+        .setData(macd.dea.map((value, i) => ({ time: times[i], value })));
+      const [mainPane, macdPane] = chart.panes();
+      mainPane?.setStretchFactor(1);
+      macdPane?.setStretchFactor(MACD_PANE_STRETCH);
+    }
+
     const total = data.bars.length;
     // 窄屏上按每根 K 线约 5px 估算，避免手机上一屏挤进 180 根
     const visibleBars = Math.max(40, Math.min(DEFAULT_VISIBLE_BARS, Math.floor(container.clientWidth / 5)));
@@ -191,6 +220,8 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
     overlays.showSegments,
     overlays.showPivots,
     overlays.showBuyPoints,
+    overlays.showMacd,
+    macd,
     isDark,
     intraday,
     t,
@@ -214,8 +245,9 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
         value: values[idx] ?? null,
         color: MA_COLORS[i % MA_COLORS.length],
       })),
+      macd: idx < macd.dif.length ? { dif: macd.dif[idx], dea: macd.dea[idx], hist: macd.hist[idx] } : null,
     };
-  }, [data.bars, hoverIndex, maEntries]);
+  }, [data.bars, hoverIndex, maEntries, macd]);
 
   return (
     <div className={className}>
@@ -240,9 +272,21 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
                 </span>
               ))
             : null}
+          {overlays.showMacd && legend.macd ? (
+            <span data-testid="kline-legend-macd">
+              MACD(12,26,9){' '}
+              <span className="whitespace-nowrap" style={{ color: isDark ? '#e2e8f0' : '#1e293b' }}>DIF {legend.macd.dif.toFixed(3)}</span>{' '}
+              <span className="whitespace-nowrap" style={{ color: DEA_COLOR }}>DEA {legend.macd.dea.toFixed(3)}</span>{' '}
+              <span className="whitespace-nowrap" style={{ color: legend.macd.hist >= 0 ? UP_COLOR : DOWN_COLOR }}>MACD {legend.macd.hist.toFixed(3)}</span>
+            </span>
+          ) : null}
         </div>
       ) : null}
-      <div ref={containerRef} className="h-[420px] w-full sm:h-[520px]" data-testid="kline-chart" />
+      <div
+        ref={containerRef}
+        className={overlays.showMacd ? 'h-[520px] w-full sm:h-[660px]' : 'h-[420px] w-full sm:h-[520px]'}
+        data-testid="kline-chart"
+      />
     </div>
   );
 };
