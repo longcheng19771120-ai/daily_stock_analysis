@@ -24,6 +24,8 @@ const OVERLAYS: Array<{ key: keyof KlineOverlayOptions; labelKey: UiTextKey }> =
   { key: 'showMa', labelKey: 'kline.overlay.ma' },
   { key: 'showBi', labelKey: 'kline.overlay.bi' },
   { key: 'showSegments', labelKey: 'kline.overlay.segments' },
+  { key: 'showPivots', labelKey: 'kline.overlay.pivots' },
+  { key: 'showBuyPoints', labelKey: 'kline.overlay.buyPoints' },
 ];
 
 const DEFAULT_CODE = '600519';
@@ -43,7 +45,13 @@ const KlinePage: React.FC = () => {
   const [data, setData] = useState<StockKline | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ParsedApiError | null>(null);
-  const [overlays, setOverlays] = useState<KlineOverlayOptions>({ showMa: true, showBi: true, showSegments: true });
+  const [overlays, setOverlays] = useState<KlineOverlayOptions>({
+    showMa: true,
+    showBi: true,
+    showSegments: true,
+    showPivots: true,
+    showBuyPoints: true,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);

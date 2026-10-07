@@ -9514,10 +9514,109 @@
             "type": "array",
             "title": "Segments",
             "description": "线段端点（仅已确认线段）"
+          },
+          "pivots": {
+            "items": {
+              "$ref": "#/components/schemas/ChanPivotItem"
+            },
+            "type": "array",
+            "title": "Pivots",
+            "description": "笔中枢（箱体）"
+          },
+          "buy_points": {
+            "items": {
+              "$ref": "#/components/schemas/ChanBuyPointItem"
+            },
+            "type": "array",
+            "title": "Buy Points",
+            "description": "买点（简化判定）"
           }
         },
         "type": "object",
         "title": "ChanStructure"
+      },
+      "ChanPivotItem": {
+        "properties": {
+          "start_index": {
+            "type": "integer",
+            "title": "Start Index",
+            "description": "中枢起点对应 bars 的序号"
+          },
+          "end_index": {
+            "type": "integer",
+            "title": "End Index",
+            "description": "中枢终点对应 bars 的序号（未结束且仍在区间内时为最后一根）"
+          },
+          "zg": {
+            "type": "number",
+            "title": "Zg",
+            "description": "中枢上沿 ZG"
+          },
+          "zd": {
+            "type": "number",
+            "title": "Zd",
+            "description": "中枢下沿 ZD"
+          },
+          "gg": {
+            "type": "number",
+            "title": "Gg",
+            "description": "中枢区间最高点 GG"
+          },
+          "dd": {
+            "type": "number",
+            "title": "Dd",
+            "description": "中枢区间最低点 DD"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed",
+            "description": "中枢是否已结束（离开后回抽不回中枢）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_index",
+          "end_index",
+          "zg",
+          "zd",
+          "gg",
+          "dd",
+          "confirmed"
+        ],
+        "title": "ChanPivotItem",
+        "description": "笔中枢（箱体），start_index/end_index 指向 bars 中的序号"
+      },
+      "ChanBuyPointItem": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index",
+            "description": "对应 bars 的序号"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price",
+            "description": "买点价格"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "buy1",
+              "buy2",
+              "buy3"
+            ],
+            "title": "Kind",
+            "description": "一买/二买/三买"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "price",
+          "kind"
+        ],
+        "title": "ChanBuyPointItem",
+        "description": "缠论买点（简化判定），index 指向 bars 中的序号"
       }
     },
     "securitySchemes": {

@@ -20,6 +20,25 @@ export type ChanPoint = {
   kind: 'top' | 'bottom';
 };
 
+export type ChanPivot = {
+  startIndex: number;
+  /** 未结束且最后一笔仍在区间内时为最后一根 K 线的序号 */
+  endIndex: number;
+  zg: number;
+  zd: number;
+  gg: number;
+  dd: number;
+  confirmed: boolean;
+};
+
+export type ChanBuyPointKind = 'buy1' | 'buy2' | 'buy3';
+
+export type ChanBuyPoint = {
+  index: number;
+  price: number;
+  kind: ChanBuyPointKind;
+};
+
 export type StockKline = {
   stockCode: string;
   stockName?: string | null;
@@ -30,6 +49,8 @@ export type StockKline = {
   chan: {
     bi: ChanPoint[];
     segments: ChanPoint[];
+    pivots?: ChanPivot[];
+    buyPoints?: ChanBuyPoint[];
   };
 };
 

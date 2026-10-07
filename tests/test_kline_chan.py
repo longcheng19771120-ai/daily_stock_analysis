@@ -16,7 +16,14 @@ from fastapi.testclient import TestClient
 import src.auth as auth
 from api.app import create_app
 from src.config import Config
-from src.services.chan_analysis import ChanPoint, find_bis, find_segments
+from src.services.chan_analysis import (
+    ChanPoint,
+    analyze_chan,
+    find_bis,
+    find_buy_points,
+    find_pivots,
+    find_segments,
+)
 from src.services.kline_service import (
     KlineService,
     KlineUnsupportedError,
@@ -57,6 +64,26 @@ def _bars_frame(highs, lows, start="2025-01-01", freq="D"):
 
 
 # ---------------------------------------------------------------- chan
+
+
+def _points_with_closes(spec):
+    """spec 为 [(price, bars_to_next), ...]，返回笔端点（顶底交替）和逐根线性插值的收盘价。"""
+    points, closes = [], []
+    index = 0
+    for k, (price, bars) in enumerate(spec):
+        if k + 1 < len(spec):
+            nxt = spec[k + 1][0]
+            kind = "top" if nxt < price else "bottom"
+        else:
+            kind = "top" if price > spec[k - 1][0] else "bottom"
+        points.append(ChanPoint(index, float(price), kind))
+        if k + 1 < len(spec):
+            nxt = spec[k + 1][0]
+            for j in range(bars):
+                closes.append(price + (nxt - price) * j / bars)
+            index += bars
+    closes.append(float(spec[-1][0]))
+    return points, closes
 
 
 def test_find_bis_alternates_and_hits_pivots():
@@ -283,5 +310,74 @@ def test_static_openapi_matches_kline_runtime_contract():
     runtime_spec = create_app().openapi()
     api_path = "/api/v1/stocks/{stock_code}/kline"
     assert static_spec["paths"][api_path] == runtime_spec["paths"][api_path]
-    for name in ("StockKlineResponse", "ChartBar", "ChanPointItem", "ChanStructure"):
+    for name in ("StockKlineResponse", "ChartBar", "ChanPointItem", "ChanStructure", "ChanPivotItem", "ChanBuyPointItem"):
         assert static_spec["components"]["schemas"][name] == runtime_spec["components"]["schemas"][name]
+
+
+# ---------------------------------------------------------------- pivots / buy points
+
+
+def test_find_pivots_overlap_and_third_buy():
+    # 第 0 笔为进入笔；笔 1-3 重叠 [12, 18]；向上离开到 25，回抽 19 不回中枢 -> 三买
+    points, closes = _points_with_closes([(5, 5), (20, 5), (10, 5), (18, 5), (12, 5), (25, 5), (19, 5), (28, 5)])
+    pivots = find_pivots(points, last_bar_index=len(closes) - 1)
+    assert len(pivots) == 1
+    pivot = pivots[0]
+    assert (pivot.zd, pivot.zg) == (12.0, 18.0)
+    assert pivot.confirmed is True
+    assert pivot.start_index == points[1].index
+    assert pivot.end_index == points[4].index
+    buys = find_buy_points(points, pivots, closes)
+    assert [(b.kind, b.price) for b in buys] == [("buy3", 19.0)]
+
+
+def test_find_pivots_extends_when_pullback_returns_and_stays_open_at_end():
+    # 离开到 22 后回抽到 14 回到中枢 -> 延伸；数据末尾没有新的离开+回抽 -> 未结束，画到最后一根
+    points, closes = _points_with_closes([(5, 5), (20, 5), (10, 5), (18, 5), (12, 5), (22, 5), (14, 5), (17, 5)])
+    pivots = find_pivots(points, last_bar_index=len(closes) - 1)
+    assert len(pivots) == 1
+    assert pivots[0].confirmed is False
+    assert pivots[0].end_index == len(closes) - 1
+    assert pivots[0].gg == 22.0
+    assert find_buy_points(points, pivots, closes) == []
+
+
+def test_first_and_second_buy_on_down_divergence():
+    # 进入笔 40->20 慢跌、面积大；离开笔 25->18 创新低但快速且幅度小 -> 一买；
+    # 反弹到 21 不回中枢，随后低点 19 不破 18 -> 二买
+    spec = [(40, 40), (20, 6), (26, 6), (22, 6), (25, 4), (18, 6), (21, 6), (19, 6), (21, 4)]
+    points, closes = _points_with_closes(spec)
+    pivots = find_pivots(points, last_bar_index=len(closes) - 1)
+    assert pivots and (pivots[0].zd, pivots[0].zg) == (22.0, 25.0)
+    buys = find_buy_points(points, pivots, closes)
+    assert [(b.kind, b.price) for b in buys] == [("buy1", 18.0), ("buy2", 19.0)]
+
+
+def test_no_first_buy_without_divergence():
+    # 离开笔跌得比进入笔更猛更久：没有背驰，不出一买
+    spec = [(30, 4), (20, 6), (26, 6), (22, 6), (25, 40), (5, 6), (9, 6)]
+    points, closes = _points_with_closes(spec)
+    pivots = find_pivots(points, last_bar_index=len(closes) - 1)
+    assert pivots
+    assert all(b.kind != "buy1" for b in find_buy_points(points, pivots, closes))
+
+
+def test_analyze_chan_includes_pivots_and_buy_points():
+    highs, lows = _zigzag([10, 30, 20, 26, 22, 25, 18, 23, 19, 24])
+    result = analyze_chan(highs, lows)
+    assert set(result) == {"bi", "segments", "pivots", "buy_points"}
+    for pivot in result["pivots"]:
+        assert pivot["zg"] > pivot["zd"]
+        assert 0 <= pivot["start_index"] < pivot["end_index"] < len(highs)
+    for buy in result["buy_points"]:
+        assert buy["kind"] in {"buy1", "buy2", "buy3"}
+        assert lows[buy["index"]] == pytest.approx(buy["price"])
+
+
+def test_open_pivot_stops_at_departure_while_waiting_for_pullback():
+    # 最后一笔跌出中枢、尚无回抽：中枢未确认，但箱体停在离开笔起点，不延伸到最后一根
+    points, closes = _points_with_closes([(5, 5), (20, 5), (10, 5), (18, 5), (12, 5), (16, 5), (3, 5)])
+    pivots = find_pivots(points, last_bar_index=len(closes) - 1)
+    assert len(pivots) == 1
+    assert pivots[0].confirmed is False
+    assert pivots[0].end_index == points[5].index
