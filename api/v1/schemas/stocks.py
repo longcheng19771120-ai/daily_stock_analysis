@@ -134,9 +134,31 @@ class ChanPointItem(BaseModel):
     kind: Literal["top", "bottom"] = Field(..., description="顶/底")
 
 
+class ChanPivotItem(BaseModel):
+    """笔中枢（箱体），start_index/end_index 指向 bars 中的序号"""
+
+    start_index: int = Field(..., description="中枢起点对应 bars 的序号")
+    end_index: int = Field(..., description="中枢终点对应 bars 的序号（未结束且仍在区间内时为最后一根）")
+    zg: float = Field(..., description="中枢上沿 ZG")
+    zd: float = Field(..., description="中枢下沿 ZD")
+    gg: float = Field(..., description="中枢区间最高点 GG")
+    dd: float = Field(..., description="中枢区间最低点 DD")
+    confirmed: bool = Field(..., description="中枢是否已结束（离开后回抽不回中枢）")
+
+
+class ChanBuyPointItem(BaseModel):
+    """缠论买点（简化判定），index 指向 bars 中的序号"""
+
+    index: int = Field(..., description="对应 bars 的序号")
+    price: float = Field(..., description="买点价格")
+    kind: Literal["buy1", "buy2", "buy3"] = Field(..., description="一买/二买/三买")
+
+
 class ChanStructure(BaseModel):
     bi: List[ChanPointItem] = Field(default_factory=list, description="笔端点")
     segments: List[ChanPointItem] = Field(default_factory=list, description="线段端点（仅已确认线段）")
+    pivots: List[ChanPivotItem] = Field(default_factory=list, description="笔中枢（箱体）")
+    buy_points: List[ChanBuyPointItem] = Field(default_factory=list, description="买点（简化判定）")
 
 
 class StockKlineResponse(BaseModel):

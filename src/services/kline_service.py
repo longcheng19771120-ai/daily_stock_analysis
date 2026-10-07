@@ -126,7 +126,11 @@ def build_kline_payload(
             round(v, 4) if v is not None else None for v in (_finite_or_none(x) for x in series)
         ]
 
-    chan = analyze_chan(bars_df["high"].tolist(), bars_df["low"].tolist()) if bars else {"bi": [], "segments": []}
+    chan = (
+        analyze_chan(bars_df["high"].tolist(), bars_df["low"].tolist(), bars_df["close"].tolist())
+        if bars
+        else {"bi": [], "segments": [], "pivots": [], "buy_points": []}
+    )
     return {"bars": bars, "moving_averages": moving_averages, "chan": chan}
 
 

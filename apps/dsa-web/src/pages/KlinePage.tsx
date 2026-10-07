@@ -24,6 +24,8 @@ const OVERLAYS: Array<{ key: keyof KlineOverlayOptions; labelKey: UiTextKey }> =
   { key: 'showMa', labelKey: 'kline.overlay.ma' },
   { key: 'showBi', labelKey: 'kline.overlay.bi' },
   { key: 'showSegments', labelKey: 'kline.overlay.segments' },
+  { key: 'showPivots', labelKey: 'kline.overlay.pivots' },
+  { key: 'showBuyPoints', labelKey: 'kline.overlay.buyPoints' },
 ];
 
 const DEFAULT_CODE = '600519';
@@ -43,7 +45,13 @@ const KlinePage: React.FC = () => {
   const [data, setData] = useState<StockKline | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ParsedApiError | null>(null);
-  const [overlays, setOverlays] = useState<KlineOverlayOptions>({ showMa: true, showBi: true, showSegments: true });
+  const [overlays, setOverlays] = useState<KlineOverlayOptions>({
+    showMa: true,
+    showBi: true,
+    showSegments: true,
+    showPivots: true,
+    showBuyPoints: true,
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,7 +136,7 @@ const KlinePage: React.FC = () => {
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-xl border border-border/70 bg-card/70 p-1">
+              <div className="inline-flex max-w-full flex-wrap rounded-xl border border-border/70 bg-card/70 p-1">
                 {PERIODS.map((option) => (
                   <button
                     key={option.value}
@@ -145,7 +153,7 @@ const KlinePage: React.FC = () => {
                   </button>
                 ))}
               </div>
-              <div className="inline-flex rounded-xl border border-border/70 bg-card/70 p-1">
+              <div className="inline-flex max-w-full flex-wrap rounded-xl border border-border/70 bg-card/70 p-1">
                 {OVERLAYS.map((option) => (
                   <button
                     key={option.key}

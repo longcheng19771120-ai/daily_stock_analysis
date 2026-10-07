@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { UTCTimestamp } from 'lightweight-charts';
-import { toChartTime, toPolyline } from '../klineChartUtils';
+import { toBuyMarkers, toChartTime, toPolyline } from '../klineChartUtils';
 
 describe('klineChartUtils', () => {
   it('treats daily and minute strings as wall-clock UTC timestamps', () => {
@@ -24,6 +24,24 @@ describe('klineChartUtils', () => {
       { time: 100, value: 10 },
       { time: 300, value: 20 },
       { time: 400, value: 12 },
+    ]);
+  });
+
+  it('maps buy points to sorted below-bar markers and drops out-of-range points', () => {
+    const times = [100, 200, 300] as UTCTimestamp[];
+    const markers = toBuyMarkers(
+      [
+        { index: 2, price: 12, kind: 'buy2' },
+        { index: 7, price: 9, kind: 'buy3' },
+        { index: 0, price: 10, kind: 'buy1' },
+      ],
+      times,
+      (kind) => kind.toUpperCase(),
+      () => '#f00',
+    );
+    expect(markers).toEqual([
+      { time: 100, position: 'belowBar', shape: 'arrowUp', color: '#f00', text: 'BUY1' },
+      { time: 300, position: 'belowBar', shape: 'arrowUp', color: '#f00', text: 'BUY2' },
     ]);
   });
 });

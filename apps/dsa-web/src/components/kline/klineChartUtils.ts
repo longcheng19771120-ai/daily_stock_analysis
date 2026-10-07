@@ -1,5 +1,5 @@
 import type { UTCTimestamp } from 'lightweight-charts';
-import type { ChanPoint } from '../../api/kline';
+import type { ChanBuyPoint, ChanPoint } from '../../api/kline';
 
 /** 把接口给的北京时间字符串按 UTC 解释，让图上显示的时刻与原始时间一致。 */
 export function toChartTime(value: string): UTCTimestamp {
@@ -21,4 +21,23 @@ export function toPolyline(points: ChanPoint[], times: UTCTimestamp[]) {
     result.push({ time, value: point.price });
   }
   return result;
+}
+
+/** 把买点映射成 K 线下方的向上箭头标记，按时间升序并丢弃越界点。 */
+export function toBuyMarkers(
+  points: ChanBuyPoint[],
+  times: UTCTimestamp[],
+  labelFor: (kind: ChanBuyPoint['kind']) => string,
+  colorFor: (kind: ChanBuyPoint['kind']) => string,
+) {
+  return points
+    .filter((point) => times[point.index] !== undefined)
+    .sort((a, b) => a.index - b.index)
+    .map((point) => ({
+      time: times[point.index],
+      position: 'belowBar' as const,
+      shape: 'arrowUp' as const,
+      color: colorFor(point.kind),
+      text: labelFor(point.kind),
+    }));
 }
