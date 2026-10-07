@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { UTCTimestamp } from 'lightweight-charts';
-import { toBuyMarkers, toChartTime, toPolyline } from '../klineChartUtils';
+import { computeMacd, toBuyMarkers, toChartTime, toPolyline } from '../klineChartUtils';
 
 describe('klineChartUtils', () => {
   it('treats daily and minute strings as wall-clock UTC timestamps', () => {
@@ -43,5 +43,22 @@ describe('klineChartUtils', () => {
       { time: 100, position: 'belowBar', shape: 'arrowUp', color: '#f00', text: 'BUY1' },
       { time: 300, position: 'belowBar', shape: 'arrowUp', color: '#f00', text: 'BUY2' },
     ]);
+  });
+
+  it('computes MACD with first-close seeded EMAs and a doubled histogram', () => {
+    const flat = computeMacd([10, 10, 10]);
+    expect(flat.dif).toEqual([0, 0, 0]);
+    expect(flat.hist).toEqual([0, 0, 0]);
+
+    const macd = computeMacd([10, 11]);
+    // EMA12 = 10 + 1 * 2/13, EMA26 = 10 + 1 * 2/27
+    const dif = 2 / 13 - 2 / 27;
+    expect(macd.dif[1]).toBeCloseTo(dif, 10);
+    expect(macd.dea[1]).toBeCloseTo(dif * 0.2, 10);
+    expect(macd.hist[1]).toBeCloseTo(2 * (dif - dif * 0.2), 10);
+
+    const rising = computeMacd(Array.from({ length: 60 }, (_, i) => 10 + i));
+    expect(rising.dif[59]).toBeGreaterThan(0);
+    expect(rising.hist).toHaveLength(60);
   });
 });
