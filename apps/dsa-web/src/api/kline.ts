@@ -20,6 +20,22 @@ export type ChanPoint = {
   kind: 'top' | 'bottom';
 };
 
+export type ChanPivot = {
+  startIndex: number;
+  endIndex: number;
+  /** 中枢上沿 */
+  zg: number;
+  /** 中枢下沿 */
+  zd: number;
+};
+
+export type ChanBuyPoint = {
+  index: number;
+  price: number;
+  /** 1=一买 2=二买 3=三买 */
+  type: 1 | 2 | 3;
+};
+
 export type StockKline = {
   stockCode: string;
   stockName?: string | null;
@@ -30,6 +46,8 @@ export type StockKline = {
   chan: {
     bi: ChanPoint[];
     segments: ChanPoint[];
+    pivots?: ChanPivot[];
+    buyPoints?: ChanBuyPoint[];
   };
 };
 

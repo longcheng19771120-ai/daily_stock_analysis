@@ -7,12 +7,14 @@ import {
   HistogramSeries,
   LineSeries,
   createChart,
+  createSeriesMarkers,
   type IChartApi,
   type MouseEventParams,
 } from 'lightweight-charts';
 import { useTheme } from 'next-themes';
 import type { StockKline } from '../../api/kline';
-import { toChartTime, toPolyline } from './klineChartUtils';
+import { ChanPivotsPrimitive } from './chanPivotsPrimitive';
+import { toBuyPointMarkers, toChartTime, toPivotBoxes, toPolyline } from './klineChartUtils';
 import { useUiLanguage } from '../../contexts/UiLanguageContext';
 
 // A 股习惯：红涨绿跌
@@ -21,12 +23,17 @@ const DOWN_COLOR = '#22c55e';
 const MA_COLORS = ['#f59e0b', '#3b82f6', '#a855f7', '#14b8a6'];
 const BI_COLOR = '#0ea5e9';
 const SEGMENT_COLOR = '#f97316';
+const PIVOT_FILL = 'rgba(168,85,247,0.12)';
+const PIVOT_STROKE = 'rgba(168,85,247,0.7)';
+const BUY_POINT_COLOR = '#db2777';
 const DEFAULT_VISIBLE_BARS = 180;
 
 export type KlineOverlayOptions = {
   showMa: boolean;
   showBi: boolean;
   showSegments: boolean;
+  showPivots: boolean;
+  showBuyPoints: boolean;
 };
 
 type KlineChartProps = {
@@ -140,6 +147,17 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
         .addSeries(LineSeries, { ...lineDefaults, color: SEGMENT_COLOR, lineWidth: 3 })
         .setData(toPolyline(data.chan.segments, times));
     }
+    const pivots = data.chan.pivots ?? [];
+    if (overlays.showPivots && pivots.length) {
+      candles.attachPrimitive(new ChanPivotsPrimitive(toPivotBoxes(pivots, times), PIVOT_FILL, PIVOT_STROKE));
+    }
+    const buyPoints = data.chan.buyPoints ?? [];
+    if (overlays.showBuyPoints && buyPoints.length) {
+      createSeriesMarkers(
+        candles,
+        toBuyPointMarkers(buyPoints, times, (type) => t(`kline.buyPoint.${type}`), BUY_POINT_COLOR),
+      );
+    }
 
     const total = data.bars.length;
     // 窄屏上按每根 K 线约 5px 估算，避免手机上一屏挤进 180 根
@@ -165,7 +183,19 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
       chart.remove();
       chartRef.current = null;
     };
-  }, [data, times, maEntries, overlays.showMa, overlays.showBi, overlays.showSegments, isDark, intraday]);
+  }, [
+    data,
+    times,
+    maEntries,
+    overlays.showMa,
+    overlays.showBi,
+    overlays.showSegments,
+    overlays.showPivots,
+    overlays.showBuyPoints,
+    isDark,
+    intraday,
+    t,
+  ]);
 
   const legend: LegendState | null = useMemo(() => {
     if (!data.bars.length) return null;

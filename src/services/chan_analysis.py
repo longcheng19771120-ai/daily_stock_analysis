@@ -20,15 +20,29 @@
   这是对特征序列分型判定的近似，不等同于完整的特征序列算法。
 - 校正：笔和线段端点最后都会校正到相邻反向端点之间的真实极值上，保证
   每一笔、每一段的端点就是该区间的最高/最低点。
+- 中枢（箱体）：以笔为次级别走势，连续三笔价格区间的重叠部分
+  [ZD, ZG]（ZG 为三笔高点的最小值，ZD 为三笔低点的最大值）且 ZG > ZD 时
+  形成中枢；之后的笔只要与 [ZD, ZG] 有重叠就延伸中枢，出现完全不重叠的
+  一笔时中枢结束，从下一笔开始寻找新中枢。中枢延伸到九笔时视为升级为
+  更大级别中枢，本级别在此截断，避免震荡行情里整段只画出一个箱体。
+- 买点（简化版，仅供参考）：
+  - 一买：中枢由上方向下进入，之后（中枢内或离开中枢时）某一向下笔跌破 ZD
+    并创出低于此前所有低点的新低，且该笔的 MACD 绿柱面积小于进入笔（背驰）。
+    MACD 柱相对价格滞后，两笔的面积都统计到下一个笔端点为止；新低之后
+    必须已出现反弹笔，确认该低点成立。每个中枢最多一个一买。
+  - 二买：一买之后的第一个回调低点，且不低于一买。
+  - 三买：向上离开中枢后，回调的一笔低点仍高于 ZG。
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 MIN_BI_BAR_GAP = 4
 MIN_SEGMENT_BI = 3
+# 中枢延伸到九笔即视为升级为更大级别中枢，本级别在此截断
+MAX_PIVOT_BI = 9
 
 
 @dataclass(frozen=True)
@@ -246,11 +260,141 @@ def find_segments(bi_points: Sequence[ChanPoint]) -> List[ChanPoint]:
     return [bi_points[i] for i in points]
 
 
-def analyze_chan(highs: Sequence[float], lows: Sequence[float]) -> Dict[str, List[Dict[str, object]]]:
-    """计算笔与线段，返回可序列化结果。"""
+@dataclass(frozen=True)
+class ChanPivot:
+    """中枢。start_index/end_index 为原始 K 线序号；first_bi/last_bi 为构成中枢的笔序号。"""
+
+    start_index: int
+    end_index: int
+    zg: float
+    zd: float
+    first_bi: int
+    last_bi: int
+
+    def to_dict(self) -> Dict[str, object]:
+        return {"start_index": self.start_index, "end_index": self.end_index, "zg": self.zg, "zd": self.zd}
+
+
+def find_pivots(bi_points: Sequence[ChanPoint]) -> List[ChanPivot]:
+    """由笔端点序列识别中枢。第 k 笔连接 bi_points[k] 与 bi_points[k + 1]。"""
+    stroke_count = len(bi_points) - 1
+    if stroke_count < 3:
+        return []
+    highs = [max(bi_points[k].price, bi_points[k + 1].price) for k in range(stroke_count)]
+    lows = [min(bi_points[k].price, bi_points[k + 1].price) for k in range(stroke_count)]
+
+    pivots: List[ChanPivot] = []
+    k = 0
+    while k + 2 < stroke_count:
+        zg = min(highs[k:k + 3])
+        zd = max(lows[k:k + 3])
+        if zg <= zd:
+            k += 1
+            continue
+        last = k + 2
+        while (
+            last + 1 < stroke_count
+            and last + 1 - k < MAX_PIVOT_BI
+            and lows[last + 1] <= zg
+            and highs[last + 1] >= zd
+        ):
+            last += 1
+        # 方框从第一笔进入区间处开始；若最后一笔终点已离开区间，说明离开从该笔起点开始
+        start_index = bi_points[k + 1].index
+        exit_point = bi_points[last + 1]
+        end_index = exit_point.index if zd <= exit_point.price <= zg else bi_points[last].index
+        if end_index > start_index:
+            pivots.append(ChanPivot(start_index, end_index, zg, zd, k, last))
+        k = last + 1
+    return pivots
+
+
+def _macd_histogram(closes: Sequence[float]) -> List[float]:
+    """MACD 柱（DIF - DEA），参数 12/26/9。"""
+    def ema(values: Sequence[float], span: int) -> List[float]:
+        alpha = 2.0 / (span + 1)
+        out: List[float] = []
+        for v in values:
+            out.append(float(v) if not out else alpha * float(v) + (1 - alpha) * out[-1])
+        return out
+
+    fast, slow = ema(closes, 12), ema(closes, 26)
+    dif = [f - s for f, s in zip(fast, slow)]
+    dea = ema(dif, 9)
+    return [d - e for d, e in zip(dif, dea)]
+
+
+def _down_area(hist: Sequence[float], start: int, end: int) -> float:
+    """区间内 MACD 绿柱面积（取绝对值）。"""
+    return -sum(v for v in hist[start:end + 1] if v < 0)
+
+
+def find_buy_points(
+    bi_points: Sequence[ChanPoint],
+    pivots: Sequence[ChanPivot],
+    closes: Sequence[float],
+) -> List[Dict[str, object]]:
+    """识别一、二、三类买点，返回 {index, price, type} 列表（按 K 线序号升序）。"""
+    if not pivots or not closes:
+        return []
+    hist = _macd_histogram(closes)
+    found: Dict[tuple, Dict[str, object]] = {}
+
+    def add(point: ChanPoint, kind: int) -> None:
+        found[(point.index, kind)] = {"index": point.index, "price": point.price, "type": kind}
+
+    for pivot in pivots:
+        first, last = pivot.first_bi, pivot.last_bi
+        exit_point = bi_points[last + 1]
+
+        # 一买：从上方进入（第一笔向下且起点在 ZG 之上），之后向下笔跌破 ZD 创新低且 MACD 面积背驰
+        enter_start, enter_end = bi_points[first], bi_points[first + 1]
+        if enter_end.kind == "bottom" and enter_start.price > pivot.zg:
+            # MACD 柱相对价格滞后，面积统计到下一个笔端点为止
+            enter_area = _down_area(hist, enter_start.index, bi_points[first + 2].index)
+            lowest = enter_end.price
+            # 候选低点为中枢内各笔及离开笔的终点；要求其后已有反弹笔确认
+            for j in range(first + 3, min(last + 1, len(bi_points) - 2) + 1, 2):
+                point = bi_points[j]
+                if point.kind != "bottom" or point.price >= lowest:
+                    continue
+                lowest = point.price
+                if point.price >= pivot.zd:
+                    continue
+                exit_area = _down_area(hist, bi_points[j - 1].index, bi_points[j + 1].index)
+                if 0 < enter_area and exit_area < enter_area:
+                    add(point, 1)
+                    # 二买：一买之后的第一个回调低点不破一买
+                    if j + 2 < len(bi_points) and bi_points[j + 2].price > point.price:
+                        add(bi_points[j + 2], 2)
+                    break
+
+        # 三买：向上离开中枢后，回调低点仍在 ZG 之上
+        if exit_point.kind == "top" and exit_point.price > pivot.zg and last + 2 < len(bi_points):
+            pullback = bi_points[last + 2]
+            if pullback.kind == "bottom" and pullback.price > pivot.zg:
+                add(pullback, 3)
+
+    return sorted(found.values(), key=lambda item: (item["index"], item["type"]))
+
+
+def analyze_chan(
+    highs: Sequence[float],
+    lows: Sequence[float],
+    closes: Optional[Sequence[float]] = None,
+) -> Dict[str, List[Dict[str, object]]]:
+    """计算笔、线段、中枢与买点，返回可序列化结果。
+
+    closes 用于计算一买的 MACD 背驰；不传时以 (high + low) / 2 近似。
+    """
     bis = find_bis(highs, lows)
     segments = find_segments(bis)
+    pivots = find_pivots(bis)
+    if closes is None:
+        closes = [(float(h) + float(l)) / 2 for h, l in zip(highs, lows)]
     return {
         "bi": [p.to_dict() for p in bis],
         "segments": [p.to_dict() for p in segments],
+        "pivots": [p.to_dict() for p in pivots],
+        "buy_points": find_buy_points(bis, pivots, closes),
     }

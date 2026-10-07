@@ -1,5 +1,6 @@
 import type { UTCTimestamp } from 'lightweight-charts';
-import type { ChanPoint } from '../../api/kline';
+import type { ChanBuyPoint, ChanPivot, ChanPoint } from '../../api/kline';
+import type { PivotBox } from './chanPivotsPrimitive';
 
 /** 把接口给的北京时间字符串按 UTC 解释，让图上显示的时刻与原始时间一致。 */
 export function toChartTime(value: string): UTCTimestamp {
@@ -21,4 +22,36 @@ export function toPolyline(points: ChanPoint[], times: UTCTimestamp[]) {
     result.push({ time, value: point.price });
   }
   return result;
+}
+
+/** 把中枢映射成矩形，丢弃越界或宽度为 0 的中枢。 */
+export function toPivotBoxes(pivots: ChanPivot[], times: UTCTimestamp[]): PivotBox[] {
+  return pivots.flatMap((pivot) => {
+    const from = times[pivot.startIndex];
+    const to = times[pivot.endIndex];
+    if (from === undefined || to === undefined || to <= from) return [];
+    return [{ from, to, top: pivot.zg, bottom: pivot.zd }];
+  });
+}
+
+/** 把买点映射成按时间升序的标记数据（lightweight-charts 要求标记有序）。 */
+export function toBuyPointMarkers(
+  points: ChanBuyPoint[],
+  times: UTCTimestamp[],
+  label: (type: ChanBuyPoint['type']) => string,
+  color: string,
+) {
+  return points
+    .flatMap((point) => {
+      const time = times[point.index];
+      if (time === undefined) return [];
+      return [{
+        time,
+        position: 'belowBar' as const,
+        shape: 'arrowUp' as const,
+        color,
+        text: label(point.type),
+      }];
+    })
+    .sort((a, b) => a.time - b.time);
 }

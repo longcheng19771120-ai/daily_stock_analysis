@@ -16,7 +16,14 @@ from fastapi.testclient import TestClient
 import src.auth as auth
 from api.app import create_app
 from src.config import Config
-from src.services.chan_analysis import ChanPoint, find_bis, find_segments
+from src.services.chan_analysis import (
+    ChanPoint,
+    analyze_chan,
+    find_bis,
+    find_buy_points,
+    find_pivots,
+    find_segments,
+)
 from src.services.kline_service import (
     KlineService,
     KlineUnsupportedError,
@@ -132,6 +139,127 @@ def test_bi_and_segment_endpoints_are_range_extremes(seed):
 
 
 # ---------------------------------------------------------------- service
+
+
+def _chan_points(spec):
+    """spec: [(index, price, kind), ...] -> ChanPoint 列表。"""
+    return [ChanPoint(i, float(p), k) for i, p, k in spec]
+
+
+def _interp_closes(points, length):
+    """在笔端点之间线性插值收盘价，用于构造 MACD。"""
+    closes = [points[0].price] * length
+    for a, b in zip(points, points[1:]):
+        for i in range(a.index, b.index + 1):
+            t = (i - a.index) / (b.index - a.index)
+            closes[i] = a.price + (b.price - a.price) * t
+    for i in range(points[-1].index, length):
+        closes[i] = points[-1].price
+    return closes
+
+
+def test_find_pivots_overlap_extend_and_third_buy():
+    bi = _chan_points([
+        (0, 20, "top"), (5, 10, "bottom"), (10, 16, "top"), (15, 12, "bottom"),
+        (20, 17, "top"), (25, 13, "bottom"), (30, 25, "top"), (35, 19, "bottom"),
+    ])
+    pivots = find_pivots(bi)
+    assert len(pivots) == 1
+    pivot = pivots[0]
+    assert (pivot.zg, pivot.zd) == (16.0, 12.0)
+    # 第 5 笔 13 -> 25 从区间内离开，方框止于它的起点
+    assert (pivot.start_index, pivot.end_index) == (5, 25)
+    assert (pivot.first_bi, pivot.last_bi) == (0, 5)
+
+    buys = find_buy_points(bi, pivots, _interp_closes(bi, 40))
+    assert buys == [{"index": 35, "price": 19.0, "type": 3}]
+
+
+def test_find_pivots_requires_three_strokes():
+    bi = _chan_points([(0, 10, "bottom"), (5, 14, "top"), (10, 13, "bottom")])
+    assert find_pivots(bi) == []
+    assert find_pivots([]) == []
+
+
+def test_find_pivots_caps_extension_at_nine_strokes():
+    # 12 笔在同一区间来回震荡：第一个中枢截断在九笔，剩下的笔另起中枢
+    spec = [(i * 5, 20 if i % 2 == 0 else 10, "top" if i % 2 == 0 else "bottom") for i in range(13)]
+    pivots = find_pivots(_chan_points(spec))
+    assert len(pivots) == 2
+    assert (pivots[0].first_bi, pivots[0].last_bi) == (0, 8)
+    assert pivots[1].first_bi == 9
+
+
+def _down_pivot_points(exit_bar):
+    """从上方进入中枢、向下离开并创新低的结构；exit_bar 控制离开笔的长度（越长越缓）。"""
+    return _chan_points([
+        (0, 30, "top"), (10, 20, "bottom"), (15, 25, "top"), (20, 21, "bottom"),
+        (25, 24, "top"), (exit_bar, 19, "bottom"), (exit_bar + 5, 20.5, "top"), (exit_bar + 10, 19.5, "bottom"),
+    ])
+
+
+def test_first_and_second_buy_on_divergence():
+    bi = _down_pivot_points(exit_bar=70)
+    pivots = find_pivots(bi)
+    assert len(pivots) == 1 and (pivots[0].zg, pivots[0].zd) == (25.0, 21.0)
+    buys = find_buy_points(bi, pivots, _interp_closes(bi, 90))
+    assert buys == [
+        {"index": 70, "price": 19.0, "type": 1},
+        {"index": 80, "price": 19.5, "type": 2},
+    ]
+
+
+def test_no_first_buy_without_divergence():
+    # 离开笔比进入笔更陡，MACD 绿柱面积更大，不构成背驰
+    bi = _chan_points([
+        (0, 26, "top"), (20, 20, "bottom"), (25, 25, "top"), (30, 21, "bottom"),
+        (35, 24, "top"), (39, 8, "bottom"), (44, 10, "top"), (49, 9, "bottom"),
+    ])
+    pivots = find_pivots(bi)
+    assert len(pivots) == 1
+    assert find_buy_points(bi, pivots, _interp_closes(bi, 60)) == []
+
+
+def test_first_buy_inside_extended_pivot_and_needs_rebound():
+    # 新低后反弹回到中枢区间，中枢继续延伸；一买仍应在新低处识别
+    bi = _chan_points([
+        (0, 30, "top"), (10, 20, "bottom"), (15, 25, "top"), (20, 21, "bottom"),
+        (25, 24, "top"), (70, 19, "bottom"), (75, 22, "top"), (80, 20, "bottom"), (85, 23, "top"),
+    ])
+    pivots = find_pivots(bi)
+    assert len(pivots) == 1 and pivots[0].last_bi >= 6
+    buys = find_buy_points(bi, pivots, _interp_closes(bi, 90))
+    assert buys == [
+        {"index": 70, "price": 19.0, "type": 1},
+        {"index": 80, "price": 20.0, "type": 2},
+    ]
+    # 新低尚未出现反弹笔时不确认一买
+    tail = bi[:6]
+    assert find_buy_points(tail, find_pivots(tail), _interp_closes(tail, 90)) == []
+
+
+@pytest.mark.parametrize("seed", range(20))
+def test_pivots_and_buy_points_are_consistent(seed):
+    import random
+
+    rng = random.Random(seed)
+    price, highs, lows, closes = 100.0, [], [], []
+    for i in range(400):
+        price *= 1 + rng.gauss(0, 0.015) + 0.01 * __import__("math").sin(i / 9)
+        spread = abs(rng.gauss(0, 0.006)) * price
+        highs.append(price + spread)
+        lows.append(price - spread)
+        closes.append(price)
+    chan = analyze_chan(highs, lows, closes)
+    bottoms = {(p["index"], p["price"]) for p in chan["bi"] if p["kind"] == "bottom"}
+    for pivot in chan["pivots"]:
+        assert pivot["zg"] > pivot["zd"]
+        assert 0 <= pivot["start_index"] < pivot["end_index"] < len(highs)
+    for buy in chan["buy_points"]:
+        assert (buy["index"], buy["price"]) in bottoms
+        assert buy["type"] in (1, 2, 3)
+    starts = [p["start_index"] for p in chan["pivots"]]
+    assert starts == sorted(starts)
 
 
 def test_to_sina_minute_symbol():
@@ -283,5 +411,5 @@ def test_static_openapi_matches_kline_runtime_contract():
     runtime_spec = create_app().openapi()
     api_path = "/api/v1/stocks/{stock_code}/kline"
     assert static_spec["paths"][api_path] == runtime_spec["paths"][api_path]
-    for name in ("StockKlineResponse", "ChartBar", "ChanPointItem", "ChanStructure"):
+    for name in ("StockKlineResponse", "ChartBar", "ChanPointItem", "ChanStructure", "ChanPivotItem", "ChanBuyPointItem"):
         assert static_spec["components"]["schemas"][name] == runtime_spec["components"]["schemas"][name]
