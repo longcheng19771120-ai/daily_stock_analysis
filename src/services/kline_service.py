@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import pandas as pd
 
-from src.services.chan_analysis import analyze_chan
+from src.services.chan_analysis import analyze_chan, compute_macd
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,9 @@ def build_kline_payload(
         if bars
         else {"bi": [], "segments": [], "pivots": [], "buy_points": []}
     )
-    return {"bars": bars, "moving_averages": moving_averages, "chan": chan}
+    macd = compute_macd(bars_df["close"].tolist()) if bars else {"dif": [], "dea": [], "hist": []}
+    macd = {key: [round(v, 4) for v in values] for key, values in macd.items()}
+    return {"bars": bars, "moving_averages": moving_averages, "macd": macd, "chan": chan}
 
 
 class KlineService:

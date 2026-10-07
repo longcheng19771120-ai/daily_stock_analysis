@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- [新功能] K线页新增 MACD(12,26,9) 副图（DIF、DEA、红绿柱，可开关，悬停图例显示数值）；`GET /api/v1/stocks/{stock_code}/kline` 新增与 `bars` 对齐的 `macd.dif/dea/hist`，与一买背驰判定使用同一套计算。
 - [新功能] K线页新增缠论中枢（箱体）与一买/二买/三买标记，可分别开关；`GET /api/v1/stocks/{stock_code}/kline` 的 `chan` 新增 `pivots`（ZG/ZD/GG/DD、是否已结束）与 `buy_points`。一买按中枢后创新低且 MACD 面积背驰判定、二买为一买后不破前低、三买为离开中枢后回抽不回中枢，均为简化算法，仅供参考。
 - [新功能] Web 新增“K线”页面与 `GET /api/v1/stocks/{stock_code}/kline` 接口：支持日线、周线及 A 股 60/30 分钟 K 线，叠加成交量、MA5/20/60 与简化缠论笔/线段（TradingView Lightweight Charts 渲染，红涨绿跌）；原 `/history` 接口不变。
 - [新功能] Web 新增“市场”总览页（主要指数、美股板块热力图、市场新闻），K线页下方新增技术指标汇总、公司简介和财务数据；均为浏览器直接加载的 TradingView 免费小部件，不经过后端、不新增配置，无法访问 tradingview.com 时显示加载失败提示。

@@ -24,6 +24,9 @@ const MA_COLORS = ['#f59e0b', '#3b82f6', '#a855f7', '#14b8a6'];
 const BI_COLOR = '#0ea5e9';
 const SEGMENT_COLOR = '#f97316';
 const PIVOT_STYLE = { fill: 'rgba(234,179,8,0.14)', border: 'rgba(234,179,8,0.85)' };
+const MACD_DIF_COLOR = '#f59e0b';
+const MACD_DEA_COLOR = '#3b82f6';
+const MACD_PANE_HEIGHT = 130;
 const BUY_COLORS = { buy1: '#dc2626', buy2: '#db2777', buy3: '#9333ea' } as const;
 const DEFAULT_VISIBLE_BARS = 180;
 
@@ -33,6 +36,7 @@ export type KlineOverlayOptions = {
   showSegments: boolean;
   showPivots: boolean;
   showBuyPoints: boolean;
+  showMacd: boolean;
 };
 
 type KlineChartProps = {
@@ -50,6 +54,7 @@ type LegendState = {
   changePct: number | null;
   volume: number | null;
   ma: Array<{ key: string; value: number | null; color: string }>;
+  macd: { dif: number; dea: number; hist: number } | null;
 };
 
 function formatVolume(value: number | null): string {
@@ -71,6 +76,8 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
     [data.movingAverages],
   );
   const intraday = data.period === '60m' || data.period === '30m';
+  const macd = data.macd && data.macd.hist.length === data.bars.length ? data.macd : null;
+  const showMacdPane = overlays.showMacd && macd !== null;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -158,6 +165,30 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
       );
     }
 
+    if (showMacdPane && macd) {
+      // MACD 放在独立的第二个窗格：红绿柱 + DIF/DEA 两条线
+      chart
+        .addSeries(
+          HistogramSeries,
+          { lastValueVisible: false, priceLineVisible: false, priceFormat: { type: 'price', precision: 2, minMove: 0.01 } },
+          1,
+        )
+        .setData(
+          macd.hist.map((value, i) => ({
+            time: times[i],
+            value,
+            color: value >= 0 ? 'rgba(239,68,68,0.7)' : 'rgba(34,197,94,0.7)',
+          })),
+        );
+      chart
+        .addSeries(LineSeries, { ...lineDefaults, color: MACD_DIF_COLOR, lineWidth: 1 }, 1)
+        .setData(macd.dif.map((value, i) => ({ time: times[i], value })));
+      chart
+        .addSeries(LineSeries, { ...lineDefaults, color: MACD_DEA_COLOR, lineWidth: 1 }, 1)
+        .setData(macd.dea.map((value, i) => ({ time: times[i], value })));
+      chart.panes()[1]?.setHeight(MACD_PANE_HEIGHT);
+    }
+
     const total = data.bars.length;
     // 窄屏上按每根 K 线约 5px 估算，避免手机上一屏挤进 180 根
     const visibleBars = Math.max(40, Math.min(DEFAULT_VISIBLE_BARS, Math.floor(container.clientWidth / 5)));
@@ -191,6 +222,8 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
     overlays.showSegments,
     overlays.showPivots,
     overlays.showBuyPoints,
+    showMacdPane,
+    macd,
     isDark,
     intraday,
     t,
@@ -214,8 +247,9 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
         value: values[idx] ?? null,
         color: MA_COLORS[i % MA_COLORS.length],
       })),
+      macd: macd ? { dif: macd.dif[idx], dea: macd.dea[idx], hist: macd.hist[idx] } : null,
     };
-  }, [data.bars, hoverIndex, maEntries]);
+  }, [data.bars, hoverIndex, maEntries, macd]);
 
   return (
     <div className={className}>
@@ -240,9 +274,20 @@ export const KlineChart: React.FC<KlineChartProps> = ({ data, overlays, classNam
                 </span>
               ))
             : null}
+          {showMacdPane && legend.macd ? (
+            <>
+              <span style={{ color: MACD_DIF_COLOR }}>DIF {legend.macd.dif.toFixed(2)}</span>
+              <span style={{ color: MACD_DEA_COLOR }}>DEA {legend.macd.dea.toFixed(2)}</span>
+              <span style={{ color: legend.macd.hist >= 0 ? UP_COLOR : DOWN_COLOR }}>MACD {legend.macd.hist.toFixed(2)}</span>
+            </>
+          ) : null}
         </div>
       ) : null}
-      <div ref={containerRef} className="h-[420px] w-full sm:h-[520px]" data-testid="kline-chart" />
+      <div
+        ref={containerRef}
+        className={showMacdPane ? 'h-[520px] w-full sm:h-[640px]' : 'h-[420px] w-full sm:h-[520px]'}
+        data-testid="kline-chart"
+      />
     </div>
   );
 };

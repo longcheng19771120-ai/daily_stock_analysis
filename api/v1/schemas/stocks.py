@@ -154,6 +154,14 @@ class ChanBuyPointItem(BaseModel):
     kind: Literal["buy1", "buy2", "buy3"] = Field(..., description="一买/二买/三买")
 
 
+class MacdSeries(BaseModel):
+    """MACD(12, 26, 9)，各数组与 bars 一一对应"""
+
+    dif: List[float] = Field(default_factory=list, description="DIF（快线）")
+    dea: List[float] = Field(default_factory=list, description="DEA（慢线）")
+    hist: List[float] = Field(default_factory=list, description="MACD 柱，2 * (DIF - DEA)")
+
+
 class ChanStructure(BaseModel):
     bi: List[ChanPointItem] = Field(default_factory=list, description="笔端点")
     segments: List[ChanPointItem] = Field(default_factory=list, description="线段端点（仅已确认线段）")
@@ -162,7 +170,7 @@ class ChanStructure(BaseModel):
 
 
 class StockKlineResponse(BaseModel):
-    """K 线图数据：多周期 K 线 + 均线 + 缠论笔/线段"""
+    """K 线图数据：多周期 K 线 + 均线 + MACD + 缠论笔/线段/中枢/买点"""
 
     stock_code: str = Field(..., description="股票代码")
     stock_name: Optional[str] = Field(None, description="股票名称")
@@ -172,6 +180,7 @@ class StockKlineResponse(BaseModel):
     moving_averages: Dict[str, List[Optional[float]]] = Field(
         default_factory=dict, description="均线，键为周期，值与 bars 一一对应"
     )
+    macd: MacdSeries = Field(default_factory=MacdSeries, description="MACD(12, 26, 9)")
     chan: ChanStructure = Field(default_factory=ChanStructure, description="缠论结构")
 
 

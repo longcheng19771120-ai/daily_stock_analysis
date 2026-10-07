@@ -1716,7 +1716,7 @@ FastAPI 提供 RESTful API 服务，支持配置管理和触发分析。
 | `/api/v1/backtest/performance/{code}` | GET | 获取单股回测表现 |
 | `/api/v1/stocks/extract-from-image` | POST | 从图片提取股票代码（multipart，超时 60s） |
 | `/api/v1/stocks/parse-import` | POST | 解析 CSV/Excel/剪贴板（multipart file 或 JSON `{"text":"..."}`，文件≤2MB，文本≤100KB） |
-| `/api/v1/stocks/{stock_code}/kline?period=daily\|weekly\|60m\|30m&days=365` | GET | K 线图数据：K 线、MA5/20/60 与缠论笔/线段端点、中枢与买点；Web 侧入口为左侧导航“K线” |
+| `/api/v1/stocks/{stock_code}/kline?period=daily\|weekly\|60m\|30m&days=365` | GET | K 线图数据：K 线、MA5/20/60、MACD(12,26,9) 与缠论笔/线段端点、中枢与买点；Web 侧入口为左侧导航“K线” |
 | `/api/health` | GET | 健康检查 |
 | `/docs` | GET | API Swagger 文档 |
 

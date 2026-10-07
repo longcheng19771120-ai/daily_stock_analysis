@@ -9390,6 +9390,10 @@
             "title": "Moving Averages",
             "description": "均线，键为周期，值与 bars 一一对应"
           },
+          "macd": {
+            "$ref": "#/components/schemas/MacdSeries",
+            "description": "MACD(12, 26, 9)"
+          },
           "chan": {
             "$ref": "#/components/schemas/ChanStructure",
             "description": "缠论结构"
@@ -9401,7 +9405,7 @@
           "period"
         ],
         "title": "StockKlineResponse",
-        "description": "K 线图数据：多周期 K 线 + 均线 + 缠论笔/线段"
+        "description": "K 线图数据：多周期 K 线 + 均线 + MACD + 缠论笔/线段/中枢/买点"
       },
       "ChartBar": {
         "properties": {
@@ -9617,6 +9621,37 @@
         ],
         "title": "ChanBuyPointItem",
         "description": "缠论买点（简化判定），index 指向 bars 中的序号"
+      },
+      "MacdSeries": {
+        "properties": {
+          "dif": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Dif",
+            "description": "DIF（快线）"
+          },
+          "dea": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Dea",
+            "description": "DEA（慢线）"
+          },
+          "hist": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Hist",
+            "description": "MACD 柱，2 * (DIF - DEA)"
+          }
+        },
+        "type": "object",
+        "title": "MacdSeries",
+        "description": "MACD(12, 26, 9)，各数组与 bars 一一对应"
       }
     },
     "securitySchemes": {

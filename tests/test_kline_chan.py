@@ -19,6 +19,7 @@ from src.config import Config
 from src.services.chan_analysis import (
     ChanPoint,
     analyze_chan,
+    compute_macd,
     find_bis,
     find_buy_points,
     find_pivots,
@@ -310,7 +311,15 @@ def test_static_openapi_matches_kline_runtime_contract():
     runtime_spec = create_app().openapi()
     api_path = "/api/v1/stocks/{stock_code}/kline"
     assert static_spec["paths"][api_path] == runtime_spec["paths"][api_path]
-    for name in ("StockKlineResponse", "ChartBar", "ChanPointItem", "ChanStructure", "ChanPivotItem", "ChanBuyPointItem"):
+    for name in (
+        "StockKlineResponse",
+        "ChartBar",
+        "ChanPointItem",
+        "ChanStructure",
+        "ChanPivotItem",
+        "ChanBuyPointItem",
+        "MacdSeries",
+    ):
         assert static_spec["components"]["schemas"][name] == runtime_spec["components"]["schemas"][name]
 
 
@@ -381,3 +390,20 @@ def test_open_pivot_stops_at_departure_while_waiting_for_pullback():
     assert len(pivots) == 1
     assert pivots[0].confirmed is False
     assert pivots[0].end_index == points[5].index
+
+
+def test_compute_macd_matches_reference_and_payload_alignment():
+    closes = [10.0, 10.5, 11.0, 10.8, 11.2, 11.5]
+    macd = compute_macd(closes)
+    assert len(macd["dif"]) == len(macd["dea"]) == len(macd["hist"]) == len(closes)
+    assert macd["dif"][0] == 0 and macd["hist"][0] == 0
+    # 第二根：EMA12 = 10 + 0.5 * 2/13，EMA26 = 10 + 0.5 * 2/27，DEA = DIF * 0.2
+    dif = 0.5 * 2 / 13 - 0.5 * 2 / 27
+    assert macd["dif"][1] == pytest.approx(dif)
+    assert macd["dea"][1] == pytest.approx(dif * 0.2)
+    assert macd["hist"][1] == pytest.approx(2 * (dif - dif * 0.2))
+
+    highs, lows = _zigzag([10, 20, 12, 25])
+    payload = build_kline_payload(_bars_frame(highs, lows), period="daily")
+    assert set(payload["macd"]) == {"dif", "dea", "hist"}
+    assert all(len(values) == len(payload["bars"]) for values in payload["macd"].values())

@@ -366,8 +366,10 @@ def find_pivots(bi_points: Sequence[ChanPoint], last_bar_index: Optional[int] = 
     return pivots
 
 
-def _macd_histogram(closes: Sequence[float]) -> List[float]:
-    """标准 MACD(12, 26, 9) 柱（2 * (DIF - DEA)）。"""
+def compute_macd(closes: Sequence[float]) -> Dict[str, List[float]]:
+    """标准 MACD(12, 26, 9)：DIF、DEA 与柱（2 * (DIF - DEA)），与输入逐根对齐。"""
+    dif_list: List[float] = []
+    dea_list: List[float] = []
     hist: List[float] = []
     ema12 = ema26 = dea = None
     for close in closes:
@@ -376,8 +378,14 @@ def _macd_histogram(closes: Sequence[float]) -> List[float]:
         ema26 = close if ema26 is None else ema26 + (close - ema26) * 2 / 27
         dif = ema12 - ema26
         dea = dif if dea is None else dea + (dif - dea) * 2 / 10
+        dif_list.append(dif)
+        dea_list.append(dea)
         hist.append(2 * (dif - dea))
-    return hist
+    return {"dif": dif_list, "dea": dea_list, "hist": hist}
+
+
+def _macd_histogram(closes: Sequence[float]) -> List[float]:
+    return compute_macd(closes)["hist"]
 
 
 def _bi_macd_area(bi_points: Sequence[ChanPoint], k: int, hist: Sequence[float]) -> float:

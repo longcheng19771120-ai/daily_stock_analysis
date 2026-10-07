@@ -46,6 +46,12 @@ export type StockKline = {
   source?: string | null;
   bars: ChartBar[];
   movingAverages: Record<string, Array<number | null>>;
+  /** MACD(12, 26, 9)，与 bars 一一对应 */
+  macd?: {
+    dif: number[];
+    dea: number[];
+    hist: number[];
+  };
   chan: {
     bi: ChanPoint[];
     segments: ChanPoint[];
